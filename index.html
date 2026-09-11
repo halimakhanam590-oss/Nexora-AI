@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nexora AI</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background: #0f172a; color: #f8fafc; display: flex; flex-direction: column; height: 100vh; }
+    header { padding: 16px; text-align: center; background: #1e293b; border-bottom: 1px solid #334155; }
+    header h1 { font-size: 1.25rem; font-weight: 600; color: #38bdf8; }
+    #chat-container { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+    .msg { max-width: 80%; padding: 12px 16px; border-radius: 12px; line-height: 1.5; font-size: 0.95rem; word-wrap: break-word; }
+    .user { align-self: flex-end; background: #2563eb; color: #fff; border-bottom-right-radius: 2px; }
+    .bot { align-self: flex-start; background: #1e293b; color: #e2e8f0; border-bottom-left-radius: 2px; border: 1px solid #334155; }
+    #input-area { display: flex; padding: 12px; background: #1e293b; border-top: 1px solid #334155; gap: 8px; }
+    input { flex: 1; padding: 12px 16px; border-radius: 8px; border: 1px solid #475569; background: #0f172a; color: #fff; outline: none; font-size: 1rem; }
+    input:focus { border-color: #38bdf8; }
+    button { background: #38bdf8; color: #0f172a; border: none; padding: 0 20px; border-radius: 8px; font-weight: 600; cursor: pointer; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>🤖 Nexora AI</h1>
+  </header>
+
+  <div id="chat-container">
+    <div class="msg bot">Hello! I am Nexora AI. Ask me anything in English or বাংলা!</div>
+  </div>
+
+  <form id="input-area" onsubmit="sendMessage(event)">
+    <input type="text" id="userInput" placeholder="Ask anything..." autocomplete="off" required>
+    <button type="submit" id="sendBtn">Send</button>
+  </form>
+
+  <script>
+    async function sendMessage(e) {
+      e.preventDefault();
+      const input = document.getElementById('userInput');
+      const btn = document.getElementById('sendBtn');
+      const container = document.getElementById('chat-container');
+      const message = input.value.trim();
+
+      if (!message) return;
+
+      container.innerHTML += `<div class="msg user">${escapeHtml(message)}</div>`;
+      input.value = '';
+      btn.disabled = true;
+      container.scrollTop = container.scrollHeight;
+
+      const loadingId = 'loading-' + Date.now();
+      container.innerHTML += `<div class="msg bot" id="${loadingId}">Thinking...</div>`;
+      container.scrollTop = container.scrollHeight;
+
+      try {
+        const res = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message })
+        });
+        const data = await res.json();
+        document.getElementById(loadingId).innerText = data.reply || data.error || 'No response';
+      } catch (err) {
+        document.getElementById(loadingId).innerText = 'Error: Could not reach server.';
+      } finally {
+        btn.disabled = false;
+        container.scrollTop = container.scrollHeight;
+      }
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.innerText = text;
+      return div.innerHTML;
+    }
+  </script>
+</body>
+</html>
