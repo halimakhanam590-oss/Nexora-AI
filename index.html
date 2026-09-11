@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, interactive-widget=resizes-content">
+  <title>Nexora AI</title>
+  <!-- Marked.js (আসল মার্কডাউন রেন্ডারিং) -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <!-- Supabase Auth SDK -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; -webkit-tap-highlight-color: transparent; }
+    
+    :root {
+      --bg-main: #09090b;
+      --bg-surface: #18181b;
+      --bg-sidebar: #0f0f11;
+      --bg-input: #27272a;
+      --text-main: #f4f4f5;
+      --text-muted: #a1a1aa;
+      --accent-blue: #2563eb;
+      --border-color: #27272a;
+    }
+
+    body { background: var(--bg-main); color: var(--text-main); display: flex; height: 100dvh; overflow: hidden; }
+
+    /* সাইডবার ড্রয়ার */
+    #sidebar {
+      position: fixed; top: 0; left: -290px; width: 290px; height: 100%;
+      background: var(--bg-sidebar); border-right: 1px solid var(--border-color);
+      z-index: 100; display: flex; flex-direction: column; transition: left 0.25s ease;
+    }
+    #sidebar.active { left: 0; }
+    #overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 90; }
+    #overlay.active { display: block; }
+
+    .sidebar-header { padding: 16px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border-color); }
+    .sidebar-header h2 { font-size: 1.1rem; font-weight: 700; color: #fff; }
+    .sidebar-menu { flex: 1; overflow-y: auto; padding: 12px 8px; display: flex; flex-direction: column; gap: 4px; }
+    
+    .menu-item {
+      display: flex; align-items: center; gap: 12px; padding: 10px 12px;
+      border-radius: 8px; color: var(--text-main); font-size: 0.95rem; cursor: pointer;
+    }
+    .menu-item:hover, .menu-item.active { background: var(--bg-input); }
+    .menu-item svg { width: 18px; height: 18px; stroke: var(--text-muted); }
+    .menu-section-title { font-size: 0.75rem; color: var(--text-muted); font-weight: 600; margin: 16px 12px 6px; text-transform: uppercase; }
+
+    /* প্রোফাইল ফুটার */
+    .sidebar-footer { padding: 14px 16px; border-top: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; }
+    .user-profile { display: flex; align-items: center; gap: 10px; cursor: pointer; flex: 1; overflow: hidden; }
+    .avatar { width: 34px; height: 34px; border-radius: 50%; background: var(--accent-blue); color: #fff; display: grid; place-items: center; font-size: 0.85rem; font-weight: 700; flex-shrink: 0; }
+    .user-info { display: flex; flex-direction: column; overflow: hidden; }
+    .user-name { font-size: 0.88rem; font-weight: 600; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; }
+    .user-status { font-size: 0.72rem; color: var(--text-muted); }
+
+    /* মূল অ্যাপ */
+    #main-app { flex: 1; display: flex; flex-direction: column; height: 100dvh; position: relative; }
+    header { height: 52px; padding: 0 16px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border-color); }
+    .header-btn { background: none; border: none; color: var(--text-main); cursor: pointer; display: grid; place-items: center; }
+    .header-title { font-size: 1rem; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+
+    #chat-container { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 16px; }
+    .msg { max-width: 90%; padding: 12px 16px; border-radius: 18px; line-height: 1.6; font-size: 0.95rem; word-break: break-word; }
+    .user { align-self: flex-end; background: #27272a; color: #fff; border-bottom-right-radius: 4px; }
+    .bot { align-self: flex-start; color: #f4f4f5; border-bottom-left-radius: 4px; width: 100%; max-width: 92%; }
+
+    /* মার্কডাউন স্টাইলিং */
+    .bot p { margin-bottom: 10px; }
+    .bot p:last-child { margin-bottom: 0; }
+    .bot strong { color: #60a5fa; font-weight: 600; }
+    .bot ul, .bot ol { margin: 8px 0 12px 20px; }
+    .bot li { margin-bottom: 4px; }
+    .bot code { background: #1f2937; padding: 2px 6px; border-radius: 4px; font-size: 0.88rem; font-family: monospace; }
+    .bot pre { background: #111827; padding: 12px; border-radius: 8px; overflow-x: auto; margin: 10px 0; }
+    .bot pre code { background: transparent; padding: 0; }
+    .bot table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 0.9rem; }
+    .bot th, .bot td { border: 1px solid var(--border-color); padding: 8px 10px; text-align: left; }
+    .bot th { background: #1f2937; color: #60a5fa; }
+    .generated-img { width: 100%; max-width: 340px; border-radius: 12px; margin-top: 8px; border: 1px solid var(--border-color); }
+
+    /* কুইক সাজেশন চিপস */
+    #quick-chips { display: flex; gap: 8px; padding: 0 16px 8px; overflow-x: auto; scrollbar-width: none; }
+    #quick-chips::-webkit-scrollbar { display: none; }
+    .chip { padding: 6px 14px; background: #18181b; border: 1px solid var(--border-color); border-radius: 16px; font-size: 0.82rem; color: var(--text-muted); cursor: pointer; white-space: nowrap; transition: 0.2s; }
+    .chip:hover { color: #fff; border-color: var(--accent-blue); background: #27272a; }
+
+    /* বটম ইনপুট বার */
+    #input-form { padding: 8px 12px calc(8px + env(safe-area-inset-bottom)); display: flex; align-items: center; gap: 8px; background: var(--bg-main); }
+    .action-btn { width: 36px; height: 36px; border-radius: 50%; border: none; background: #27272a; color: #fff; display: grid; place-items: center; cursor: pointer; }
+    .input-wrapper { flex: 1; display: flex; align-items: center; background: var(--bg-input); border-radius: 24px; padding: 4px 14px; }
+    textarea { width: 100%; background: transparent; border: none; outline: none; color: #fff; font-size: 0.95rem; resize: none; max-height: 100px; padding: 6px 0; }
+    .send-btn { width: 36px; height: 36px; border-radius: 50%; border: none; background: var(--accent-blue); color: #fff; display: grid; place-items: center; cursor: pointer; }
+    .send-btn:disabled { opacity: 0.3; }
+
+    /* মডাল */
+    .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 200; place-items: center; padding: 20px; }
+    .modal.active { display: grid; }
+    .modal-box { background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: 16px; width: 100%; max-width: 360px; padding: 24px; }
+    .modal-box h3 { font-size: 1.2rem; margin-bottom: 6px; text-align: center; }
+    .modal-box p { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 20px; text-align: center; }
+    .auth-input { width: 100%; padding: 12px; margin-bottom: 12px; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 8px; color: #fff; outline: none; }
+    .auth-btn { width: 100%; padding: 12px; background: var(--accent-blue); color: #fff; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; margin-top: 4px; }
+    .auth-toggle { text-align: center; margin-top: 14px; font-size: 0.85rem; color: var(--text-muted); cursor: pointer; }
+    .auth-toggle span { color: var(--accent-blue); }
+  </style>
+</head>
+<body>
+
+  <!-- ড্রয়ার ওভারলে ও সাইডবার -->
+  <div id="overlay" onclick="toggleSidebar()"></div>
+  <aside id="sidebar">
+    <div class="sidebar-header">
+      <h2>Nexora AI</h2>
+      <button class="header-btn" onclick="toggleSidebar()">✕</button>
+    </div>
+
+    <div class="sidebar-menu">
+      <div class="menu-item" onclick="startNewChat()">
+        <svg fill="none" viewBox="0 0 24 24" stroke-width="2"><path d="M12 5v14m-7-7h14"/></svg>
+        <span>New chat</span>
+      </div>
+      <div class="menu-item" onclick="activateImageMode()">
+        <svg fill="none" viewBox="0 0 24 24" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+        <span>Images (AI Generate)</span>
+      </div>
+
+      <div class="menu-section-title">Recents</div>
+      <div id="recent-list"></div>
+    </div>
+
+    <div class="sidebar-footer">
+      <div class="user-profile" onclick="handleProfileClick()">
+        <div class="avatar" id="userAvatar">?</div>
+        <div class="user-info">
+          <span class="user-name" id="userName">লগইন করুন</span>
+          <span class="user-status" id="userPlan">Free Plan</span>
+        </div>
+      </div>
+      <button class="header-btn" id="logoutBtn" style="display:none;" onclick="handleLogout()" title="Logout">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+      </button>
+    </div>
+  </aside>
+
+  <!-- মূল চ্যাট এরিয়া -->
+  <main id="main-app">
+    <header>
+      <button class="header-btn" onclick="toggleSidebar()">
+        <svg width="22" height="22" fill="none" stroke="#ececec" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+      </button>
+      <div class="header-title" id="headerTitle">Nexora AI ▾</div>
+      <button class="header-btn" onclick="startNewChat()">
+        <svg width="20" height="20" fill="none" stroke="#ececec" stroke-width="2"><path d="M12 5v14m-7-7h14"/></svg>
+      </button>
+    </header>
+
+    <div id="chat-container">
+      <div class="msg bot">
+        <p>✨ <strong>হ্যালো! আমি Nexora AI।</strong></p>
+        <p>জটিল প্রশ্ন, কোডিং কিংবা ক্রিয়েটিভ যেকোনো আইডিয়া নিয়ে বাংলায় বা ইংরেজিতে কথা বলুন। নিচে সাজেস্ট করা প্রশ্ন দিয়েও শুরু করতে পারেন!</p>
+      </div>
+    </div>
+
+    <!-- সাজেস্টেড কুইক চিপস -->
+    <div id="quick-chips">
+      <div class="chip" onclick="fillInput('💡 একটি ইউনিক স্টার্টআপের বিজনেস আইডিয়া দাও')">💡 বিজনেস আইডিয়া</div>
+      <div class="chip" onclick="fillInput('🚀 ২০২৬ সালে অনলাইন থেকে আয়ের সেরা ৩টি উপায় কী?')">🚀 আয়ের উপায়</div>
+      <div class="chip" onclick="fillInput('📝 ক্লায়েন্টের জন্য একটি প্রফেশনাল প্রপোজাল লিখে দাও')">📝 প্রপোজাল রাইটিং</div>
+      <div class="chip" onclick="fillInput('💻 JavaScript দিয়ে একটি গেম বানানোর বেসিক কোড দাও')">💻 কোডিং গাইড</div>
+    </div>
+
+    <!-- বটম ইনপুট বার -->
+    <form id="input-form" onsubmit="handleSend(event)">
+      <button type="button" class="action-btn" onclick="activateImageMode()" title="AI Image Mode">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14m-7-7h14"/></svg>
+      </button>
+
+      <div class="input-wrapper">
+        <textarea id="userInput" rows="1" placeholder="Message Nexora AI..." oninput="autoResize(this)" required></textarea>
+      </div>
+
+      <button type="button" class="action-btn" id="micBtn" onclick="toggleSpeech()" title="Voice Input">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4m-4 0h8"/></svg>
+      </button>
+
+      <button type="submit" class="send-btn" id="sendBtn">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 19V5m-7 7l7-7 7 7"/></svg>
+      </button>
+    </form>
+  </main>
+
+  <!-- লগইন মডাল -->
+  <div class="modal" id="authModal">
+    <div class="modal-box">
+      <h3 id="authTitle">লগইন করুন</h3>
+      <p id="authDesc">আপনার Nexora অ্যাকাউন্টে প্রবেশ করুন</p>
+      <input type="email" id="authEmail" class="auth-input" placeholder="আপনার ইমেইল দিন" required>
+      <input type="password" id="authPassword" class="auth-input" placeholder="পাসওয়ার্ড দিন" required>
+      <button class="auth-btn" id="authSubmitBtn" onclick="processAuth()">লগইন</button>
+      <div class="auth-toggle" onclick="toggleAuthMode()">
+        <span id="authToggleText">নতুন অ্যাকাউন্ট তৈরি করতে সাইন-আপ করুন</span>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Supabase কনফিগ (প্রয়োজনে আপনার নিজস্ব কী বসিয়ে নিতে পারেন)
+    const SUPABASE_URL = 'https://xyzcompany.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOi...';
+    let supabase = null;
+    try {
+      if (window.supabase) supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    } catch(e) {}
+
+    let currentUser = null;
+    let isSignUpMode = false;
+    let isImageMode = false;
+    let currentSessionId = Date.now().toString();
+    let currentChatHistory = []; // মেমোরি সংরক্ষণ অ্যারে
+
+    function toggleSidebar() {
+      document.getElementById('sidebar').classList.toggle('active');
+      document.getElementById('overlay').classList.toggle('active');
+    }
+
+    function autoResize(el) {
+      el.style.height = 'auto';
+      el.style.height = Math.min(el.scrollHeight, 100) + 'px';
+    }
+
+    function fillInput(text) {
+      const input = document.getElementById('userInput');
+      input.value = text;
+      input.focus();
+      autoResize(input);
+    }
+
+    function activateImageMode() {
+      isImageMode = true;
+      document.getElementById('headerTitle').innerText = "Nexora Image AI 🎨";
+      document.getElementById('userInput').placeholder = "ইমেজের বিবরণ লিখুন (যেমন: Cyberpunk street in rain)...";
+      document.getElementById('quick-chips').style.display = 'none';
+      if (document.getElementById('sidebar').classList.contains('active')) toggleSidebar();
+    }
+
+    function startNewChat() {
+      isImageMode = false;
+      document.getElementById('headerTitle').innerText = "Nexora AI ▾";
+      document.getElementById('userInput').placeholder = "Message Nexora AI...";
+      document.getElementById('quick-chips').style.display = 'flex';
+      currentSessionId = Date.now().toString();
+      currentChatHistory = []; // মেমোরি রিসেট
+      document.getElementById('chat-container').innerHTML = `
+        <div class="msg bot">
+          <p>✨ <strong>নতুন কনভারসেশন শুরু হয়েছে!</strong></p>
+          <p>আমি আপনাকে কীভাবে সাহায্য করতে পারি?</p>
+        </div>`;
+      if (document.getElementById('sidebar').classList.contains('active')) toggleSidebar();
+    }
+
+    // মেসেজ সেন্ড ও হ্যান্ডলিং
+    async function handleSend(e) {
+      e.preventDefault();
+      const input = document.getElementById('userInput');
+      const sendBtn = document.getElementById('sendBtn');
+      const container = document.getElementById('chat-container');
+      const message = input.value.trim();
+      if (!message) return;
+
+      document.getElementById('quick-chips').style.display = 'none';
+
+      // ইউজারের মেসেজ যুক্ত করা
+      const userDiv = document.createElement('div');
+      userDiv.className = 'msg user';
+      userDiv.innerText = message;
+      container.appendChild(userDiv);
+
+      input.value = '';
+      input.style.height = 'auto';
+      sendBtn.disabled = true;
+
+      // বটের মেসেজ বক্স তৈরি
+      const botDiv = document.createElement('div');
+      botDiv.className = 'msg bot';
+      botDiv.innerText = isImageMode ? '🎨 ছবি তৈরি হচ্ছে...' : '✨ ভাবছি...';
+      container.appendChild(botDiv);
+      container.scrollTop = container.scrollHeight;
+
+      if (isImageMode) {
+        const imgUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(message)}?width=768&height=768&nologo=true`;
+        botDiv.innerHTML = `<img src="${imgUrl}" class="generated-img" alt="AI Generated Image" onload="scrollChat()" onerror="this.innerText='ছবি তৈরিতে সমস্যা হয়েছে।'" />`;
+        saveToStorage(message, imgUrl, true);
+        sendBtn.disabled = false;
+        return;
+      }
+
+      try {
+        // ব্যাকএন্ডে মেসেজ ও চ্যাট হিস্ট্রি (Memory) পাঠানো
+        const res = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            message: message, 
+            history: currentChatHistory 
+          })
+        });
+        const data = await res.json();
+        const replyText = data.reply || data.error || 'কোনো উত্তর পাওয়া যায়নি।';
+
+        // Marked.js দিয়ে মার্কডাউন পার্সিং
+        botDiv.innerHTML = marked.parse(replyText);
+
+        // মেমোরিতে ডাটা পুশ করা
+        currentChatHistory.push({ role: 'user', text: message });
+        currentChatHistory.push({ role: 'model', text: replyText });
+
+        saveToStorage(message, replyText, false);
+      } catch (err) {
+        botDiv.innerText = '❌ সার্ভারের সাথে সংযোগ বিচ্ছিন্ন হয়েছে।';
+      } finally {
+        sendBtn.disabled = false;
+        container.scrollTop = container.scrollHeight;
+      }
+    }
+
+    function scrollChat() {
+      const container = document.getElementById('chat-container');
+      container.scrollTop = container.scrollHeight;
+    }
+
+    // লোকাল স্টোরেজে হিস্ট্রি সেভ (Recents)
+    function saveToStorage(title, reply, isImg) {
+      let chats = JSON.parse(localStorage.getItem('nexora_recents') || '[]');
+      let session = chats.find(c => c.id === currentSessionId);
+      if (!session) {
+        session = { id: currentSessionId, title: title.slice(0, 24), messages: [] };
+        chats.unshift(session);
+      }
+      session.messages.push({ user: title, bot: reply, isImg });
+      localStorage.setItem('nexora_recents', JSON.stringify(chats.slice(0, 15)));
+      renderRecents();
+    }
+
+    function renderRecents() {
+      const list = document.getElementById('recent-list');
+      const chats = JSON.parse(localStorage.getItem('nexora_recents') || '[]');
+      list.innerHTML = '';
+      chats.forEach(c => {
+        const item = document.createElement('div');
+        item.className = 'menu-item';
+        item.innerHTML = `<span>💬 ${c.title}</span>`;
+        item.onclick = () => loadSession(c.id);
+        list.appendChild(item);
+      });
+    }
+
+    function loadSession(id) {
+      const chats = JSON.parse(localStorage.getItem('nexora_recents') || '[]');
+      const session = chats.find(c => c.id === id);
+      if (!session) return;
+      currentSessionId = session.id;
+      currentChatHistory = [];
+      const container = document.getElementById('chat-container');
+      container.innerHTML = '';
+      session.messages.forEach(m => {
+        const u = document.createElement('div');
+        u.className = 'msg user';
+        u.innerText = m.user;
+        container.appendChild(u);
+
+        const b = document.createElement('div');
+        b.className = 'msg bot';
+        if (m.isImg) {
+          b.innerHTML = `<img src="${m.bot}" class="generated-img" />`;
+        } else {
+          b.innerHTML = marked.parse(m.bot);
+          currentChatHistory.push({ role: 'user', text: m.user });
+          currentChatHistory.push({ role: 'model', text: m.bot });
+        }
+        container.appendChild(b);
+      });
+      toggleSidebar();
+    }
+
+    // অথেন্টিকেশন ও প্রোফাইল হ্যান্ডলার
+    function handleProfileClick() {
+      if (!currentUser) {
+        document.getElementById('authModal').classList.add('active');
+        if (document.getElementById('sidebar').classList.contains('active')) toggleSidebar();
+      }
+    }
+
+    function closeAuthModal() {
+      document.getElementById('authModal').classList.remove('active');
+    }
+
+    function toggleAuthMode() {
+      isSignUpMode = !isSignUpMode;
+      document.getElementById('authTitle').innerText = isSignUpMode ? 'নতুন অ্যাকাউন্ট তৈরি করুন' : 'লগইন করুন';
+      document.getElementById('authSubmitBtn').innerText = isSignUpMode ? 'সাইন-আপ' : 'লগইন';
+      document.getElementById('authToggleText').innerText = isSignUpMode ? 'আগের অ্যাকাউন্ট আছে? লগইন করুন' : 'নতুন অ্যাকাউন্ট তৈরি করতে সাইন-আপ করুন';
+    }
+
+    async function processAuth() {
+      const email = document.getElementById('authEmail').value.trim();
+      const password = document.getElementById('authPassword').value.trim();
+      if (!email || !password) return alert('ইমেইল ও পাসওয়ার্ড লিখুন।');
+
+      if (!supabase) {
+        // ডেমো মোড
+        currentUser = { email };
+        updateUIProfile(currentUser);
+        closeAuth
